@@ -3,13 +3,35 @@ services:
   freeswitch:
     image: drachtio/freeswitch:latest
     ports:
-      - "5080:5060/udp"
-      - "8021:8021"
+      - "5060:5060/udp"    # SIP signaling
+      - "5080:5080/udp"    # SIP signaling (alternative)
+      - "8021:8021"        # Event Socket for LiveKit
+      - "16384-16394:16384-16394/udp"  # RTP media ports
     volumes:
       - ./freeswitch-config:/etc/freeswitch
+    environment:
+      - FREESWITCH_LOG_LEVEL=INFO
     networks:
       - restaurant-net
+    depends_on:
+      - livekit
   
+  # LiveKit server for media processing
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"   # WebSocket
+      - "7881:7881"   # WebSocket with TLS  
+      - "7882:7882/udp"  # TURN/UDP
+    environment:
+      - LIVEKIT_KEYS=devkey:secret
+      - LIVEKIT_CONFIG=/etc/livekit.yaml
+    volumes:
+      - ./livekit-config.yaml:/etc/livekit.yaml
+    networks:
+      - restaurant-net
+
+  # Restaurant AI Assistant (your app)
   backend:
     build: .
     ports:
@@ -23,8 +45,15 @@ services:
       - CARTESIA_API_KEY=${CARTESIA_API_KEY}
       - CARTESIA_VOICE_ID=${CARTESIA_VOICE_ID}
       - FIREBASE_SERVICE_ACCOUNT_PATH=/app/service.json
+      # LiveKit connection
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
     networks:
       - restaurant-net
+    depends_on:
+      - livekit
+      - freeswitch
     command: python main.py
 
   # Menu management service

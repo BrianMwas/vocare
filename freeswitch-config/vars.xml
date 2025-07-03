@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<include>
+  <!-- FreeSWITCH Variables for Restaurant AI -->
+  
+  <!-- Network settings -->
+  <X-PRE-PROCESS cmd="set" data="default_password=1234"/>
+  <X-PRE-PROCESS cmd="set" data="domain=restaurant.local"/>
+  <X-PRE-PROCESS cmd="set" data="domain_name=restaurant.local"/>
+  <X-PRE-PROCESS cmd="set" data="hold_music=local_stream://moh"/>
+  
+  <!-- SIP settings -->
+  <X-PRE-PROCESS cmd="set" data="external_rtp_ip=auto-nat"/>
+  <X-PRE-PROCESS cmd="set" data="external_sip_ip=auto-nat"/>
+  
+  <!-- Codec preferences -->
+  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMU,PCMA,G729"/>
+  <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=PCMU,PCMA,G729"/>
+  
+  <!-- Restaurant specific settings -->
+  <X-PRE-PROCESS cmd="set" data="restaurant_name=Bella's Italian Kitchen"/>
+  <X-PRE-PROCESS cmd="set" data="livekit_url=ws://localhost:7880"/>
+  <X-PRE-PROCESS cmd="set" data="livekit_api_key=your-livekit-api-key"/>
+  <X-PRE-PROCESS cmd="set" data="livekit_secret=your-livekit-secret"/>
+  
+</include>
