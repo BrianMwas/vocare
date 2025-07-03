@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 from typing import Dict, List, Optional
 import uuid
+import asyncio
 
 from firebase_admin import credentials, firestore
 import firebase_admin
@@ -32,11 +33,46 @@ class FirebaseManager:
             self.call_logs_collection = self.db.collection('call_logs')
             self.analytics_collection = self.db.collection('analytics')
             
+            # In-memory menu cache for faster access
+            self.menu_items = {}
+            
             logger.info("Firebase initialized successfully")
+            
+            # Load menu items into memory asynchronously (commented out for now)
+            # asyncio.create_task(self._load_menu())
             
         except Exception as e:
             logger.error(f"Firebase initialization failed: {e}")
             raise
+
+    async def _load_menu(self):
+        """Load menu items into memory for faster access"""
+        try:
+            docs = self.menu_collection.where('available', '==', True).stream()
+            self.menu_items = {doc.id: doc.to_dict() for doc in docs}
+            logger.info(f"Loaded {len(self.menu_items)} menu items into memory")
+        except Exception as e:
+            logger.error(f"Error loading menu: {e}")
+
+    def get_menu_text(self) -> str:
+        """Get formatted menu text for agent instructions"""
+        if not self.menu_items:
+            return "Menu currently unavailable"
+        
+        menu_by_category = {}
+        for item in self.menu_items.values():
+            category = item.get('category', 'other')
+            if category not in menu_by_category:
+                menu_by_category[category] = []
+            menu_by_category[category].append(item)
+        
+        menu_text = ""
+        for category, items in menu_by_category.items():
+            menu_text += f"\n{category.upper()}:\n"
+            for item in items:
+                menu_text += f"- {item['name']}: ${item['price']} - {item['description']}\n"
+        
+        return menu_text
     
     
     async def get_menu_items(self, category: Optional[str] = None, available_only: bool = True) -> List[MenuItem]:
@@ -156,6 +192,33 @@ class FirebaseManager:
         except Exception as e:
             logger.error(f"Error getting customer order history: {e}")
             return []
+
+    async def get_customer_data(self, phone_number: str) -> Dict:
+        """Get comprehensive customer data including history and preferences"""
+        try:
+            # Get customer document
+            customer_doc = await self.customers_collection.document(phone_number).get()
+            
+            if customer_doc.exists:
+                customer_data = customer_doc.to_dict()
+                
+                # Get recent order history
+                order_history = await self.get_customer_order_history(phone_number, limit=5)
+                customer_data['recent_orders'] = order_history
+                
+                # Get customer preferences if available
+                preferences = await self.get_customer_preferences(phone_number)
+                customer_data['preferences'] = preferences
+                
+                logger.info(f"Found existing customer data for {phone_number}")
+                return customer_data
+            else:
+                logger.info(f"No existing customer data found for {phone_number}")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"Error getting customer data: {e}")
+            return {}
         
 
     # === CUSTOMER OPERATIONS ===
