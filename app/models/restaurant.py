@@ -180,3 +180,5 @@ class UserData:
             summary_parts.append(f"Loyalty points: {self.loyalty_points}")
         
         return "; ".join(summary_parts) if summary_parts else "New customer, no prior data"    
+    
+

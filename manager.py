@@ -38,14 +38,14 @@ class FirebaseManager:
             
             logger.info("Firebase initialized successfully")
             
-            # Load menu items into memory asynchronously (commented out for now)
-            # asyncio.create_task(self._load_menu())
+            # Load menu items into memory asynchronously
+            self._load_menu()
             
         except Exception as e:
             logger.error(f"Firebase initialization failed: {e}")
             raise
 
-    async def _load_menu(self):
+    def _load_menu(self):
         """Load menu items into memory for faster access"""
         try:
             docs = self.menu_collection.where('available', '==', True).stream()
@@ -108,7 +108,7 @@ class FirebaseManager:
         """Search menu items by name or description"""
         try:
             # Firebase doesn't have full-text search, so we'll get all items and filter
-            all_items = await self.get_menu_items()
+            all_items = self.get_menu_items()
             
             search_term = search_term.lower()
             matching_items = []
@@ -129,7 +129,7 @@ class FirebaseManager:
     async def update_item_availability(self, item_id: str, available: bool):
         """Update menu item availability in real-time"""
         try:
-            await self.menu_collection.document(item_id).update({
+            self.menu_collection.document(item_id).update({
                 'available': available,
                 'updated_at': datetime.now()
             })
@@ -145,13 +145,13 @@ class FirebaseManager:
         """Create new order in Firebase"""
         try:
             order_ref = self.orders_collection.document(order.id)
-            await order_ref.set(order.to_dict())
+            order_ref.set(order.to_dict())
             
             # Update customer info
-            await self._update_customer_info(order.customer_phone, order.customer_name)
+            self._update_customer_info(order.customer_phone, order.customer_name)
             
             # Update analytics
-            await self._update_order_analytics(order)
+            self._update_order_analytics(order)
             
             logger.info(f"Created order {order.id} for ${order.total_amount}")
             return True
@@ -160,10 +160,10 @@ class FirebaseManager:
             logger.error(f"Error creating order: {e}")
             return False
     
-    async def update_order_status(self, order_id: str, status: str):
+    def update_order_status(self, order_id: str, status: str):
         """Update order status with timestamp"""
         try:
-            await self.orders_collection.document(order_id).update({
+            self.orders_collection.document(order_id).update({
                 'status': status,
                 'status_updated_at': datetime.now()
             })
@@ -197,7 +197,7 @@ class FirebaseManager:
         """Get comprehensive customer data including history and preferences"""
         try:
             # Get customer document
-            customer_doc = await self.customers_collection.document(phone_number).get()
+            customer_doc = self.customers_collection.document(phone_number).get()
             
             if customer_doc.exists:
                 customer_data = customer_doc.to_dict()
@@ -222,7 +222,7 @@ class FirebaseManager:
         
 
     # === CUSTOMER OPERATIONS ===
-    async def _update_customer_info(self, phone: str, name: str):
+    def _update_customer_info(self, phone: str, name: str):
         """Update or create customer record"""
         try:
             customer_ref = self.customers_collection.document(phone)
@@ -232,14 +232,14 @@ class FirebaseManager:
             
             if customer_doc.exists:
                 # Update existing customer
-                await customer_ref.update({
+                customer_ref.update({
                     'name': name,
                     'last_order_time': datetime.now(),
                     'total_orders': firestore.Increment(1)
                 })
             else:
                 # Create new customer
-                await customer_ref.set({
+                customer_ref.set({
                     'phone': phone,
                     'name': name,
                     'first_order_time': datetime.now(),
@@ -296,11 +296,11 @@ class FirebaseManager:
             today = datetime.now().date()
             analytics_ref = self.analytics_collection.document(today.isoformat())
             
-            await analytics_ref.set({
+
+            analytics_ref.set({
                 'date': today,
                 'total_orders': firestore.Increment(1),
                 'total_revenue': firestore.Increment(order.total_amount),
-                'average_order_value': firestore.Increment(order.total_amount),
                 'updated_at': datetime.now()
             }, merge=True)
             

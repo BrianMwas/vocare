@@ -1,14 +1,12 @@
 
 
-import asyncio
 import logging
-from typing import Dict, List
 from app.models.restaurant import UserData
 from manager import FirebaseManager
 
-from livekit.agents import Agent, function_tool, RunContext, llm, ChatContext, ChatMessage
+from livekit.agents import Agent, function_tool, RunContext, ChatContext, ChatMessage, get_job_context
 from livekit.plugins import openai, silero, deepgram, cartesia
-from livekit import rtc
+from livekit import api
 from config import AgentConfig
 from shared_tools import update_customer_name, update_customer_phone, update_customer_email, add_special_instructions, get_customer_summary, check_loyalty_status
 
@@ -41,9 +39,18 @@ class BaseRestaurantAgent(Agent):
                 update_customer_email,
                 add_special_instructions,
                 get_customer_summary,
-                check_loyalty_status
+                check_loyalty_status,
+                self.end_call
             ]
         )
+        
+    def _set_room_agent_tag(self, agent_name: str):
+        try:
+            ctx = get_job_context()
+            if ctx and ctx.room and ctx.room.isconnected:
+               ctx.api.room.update_room_metadata(ctx.room.sid, {"agent": agent_name})
+        except Exception as e:
+            logger.warning(f"Failed to set agent metadata: {e}")
 
     async def on_enter(self):
         """Called when agent becomes active - manage context and greet user"""
@@ -51,8 +58,7 @@ class BaseRestaurantAgent(Agent):
         logger.info(f"Entering {agent_name}")
 
         userdata: UserData = self.session.userdata
-        if userdata.ctx and userdata.ctx.room:
-            await userdata.ctx.room.local_participant.set_attributes({"agent": agent_name})
+        self._set_room_agent_tag(agent_name)
 
         chat_ctx = self.chat_ctx.copy()
 
@@ -194,6 +200,13 @@ class BaseRestaurantAgent(Agent):
         # Default: no handoff, override in child if needed
         return None
 
+    @function_tool()
+    async def end_call(self) -> None:
+        """Use this tool when the caller's request is outside the restaurant's scope (e.g., asking about jobs, services we don't offer, etc.)"""
+        await self.session.say("Thank you for your time, have a wonderful day.")
+        job_ctx = get_job_context()
+        await job_ctx.api.room.delete_room(api.DeleteRoomRequest(room=job_ctx.room.name))
+
 
 class IntentClassifierAgent(BaseRestaurantAgent):
     def __init__(self, chat_ctx, firebase, userdata: UserData, config: AgentConfig):
@@ -262,7 +275,12 @@ class OrderAgent(BaseRestaurantAgent):
     @function_tool()
     async def finalize_order(self, context: RunContext[UserData]):
         """Hand off to ConfirmationAgent to review order details"""
-        return ConfirmationAgent(chat_ctx=self.session._chat_ctx, firebase=self.firebase, userdata=context.userdata, config=self.config)
+        return ConfirmationAgent(
+            chat_ctx=self.session._chat_ctx,
+            firebase=self.firebase,
+            userdata=context.userdata,
+            config=self.config
+        )
 
     def _handoff_if_done(self):
         """Check if enough info is collected"""
@@ -459,6 +477,6 @@ class ConfirmationAgent(BaseRestaurantAgent):
         return "Just let me know what you'd like to change - your name, phone, date, time, or party size."
 
     @function_tool()
-    async def cancel_request(self, context: RunContext[UserData]):
+    async def cancel_request(self) -> str:
         """Cancel the current request"""
         return "No problem! What else can I help you with?"
