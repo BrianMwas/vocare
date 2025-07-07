@@ -23,6 +23,7 @@ services:
       - "7880:7880"   # WebSocket
       - "7881:7881"   # WebSocket with TLS  
       - "7882:7882/udp"  # TURN/UDP
+      - "50000-60000:50000-60000/udp"  # LiveKit media ports
     environment:
       - LIVEKIT_KEYS=devkey:secret
       - LIVEKIT_CONFIG=/etc/livekit.yaml
@@ -46,9 +47,9 @@ services:
       - CARTESIA_VOICE_ID=${CARTESIA_VOICE_ID}
       - FIREBASE_SERVICE_ACCOUNT_PATH=/app/service.json
       # LiveKit connection
-      - LIVEKIT_URL=ws://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
     networks:
       - restaurant-net
     depends_on:

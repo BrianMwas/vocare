@@ -56,7 +56,7 @@ async def entrypoint(ctx: JobContext):
             config=config
         )
 
-        # Create and start the agent session
+        # Start the agent session
         session = AgentSession[UserData](userdata=userdata)
 
         # Connect to room (LiveKit automatically handles SIP vs web differences)

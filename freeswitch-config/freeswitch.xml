@@ -1,6 +1,5 @@
 <?xml version="1.0"?>
 <document type="freeswitch/xml">
-  <!-- FreeSWITCH Configuration for Restaurant AI Assistant -->
   
   <section name="configuration" description="Various Configuration">
     
@@ -60,6 +59,10 @@
             <param name="tls" value="false"/>
             <param name="inbound-late-negotiation" value="true"/>
             <param name="inbound-zrtp-passthru" value="true"/>
+            <!-- RTP port range - must match Docker port mapping -->
+            <param name="rtp-ip" value="auto-nat"/>
+            <param name="rtp-port-start" value="16384"/>
+            <param name="rtp-port-end" value="16394"/>
           </settings>
         </profile>
       </profiles>
@@ -103,13 +106,13 @@
       
       <!-- Route incoming calls to restaurant assistant -->
       <extension name="restaurant-assistant">
-        <condition field="destination_number" expression="^(restaurant|1234567890)$">
+        <condition field="destination_number" expression="^(restaurant|$${RESTAURANT_PHONE_NUMBER})$">
           <action application="answer"/>
           <action application="sleep" data="1000"/>
           <action application="set" data="call_direction=inbound"/>
           <action application="set" data="restaurant_call=true"/>
           <!-- This will be handled by LiveKit SIP integration -->
-          <action application="socket" data="127.0.0.1:8080 async full"/>
+          <action application="socket" data="backend:8000 async full"/>
         </condition>
       </extension>
       
