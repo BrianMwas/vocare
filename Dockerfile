@@ -11,4 +11,4 @@ COPY . .
 # Expose port for FreeSWITCH socket connection
 EXPOSE 8000
 
-CMD ["python", "main.py"]
+CMD ["python", "main.py", "dev"]

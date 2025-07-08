@@ -4,8 +4,8 @@ import logging
 from app.models.restaurant import UserData
 from manager import FirebaseManager
 
-from livekit.agents import Agent, function_tool, RunContext, ChatContext, ChatMessage, get_job_context
 from livekit.plugins import openai, silero, deepgram, cartesia
+from livekit.agents import Agent, function_tool, RunContext, ChatContext, ChatMessage, get_job_context
 from livekit import api
 from config import AgentConfig
 from shared_tools import update_customer_name, update_customer_phone, update_customer_email, add_special_instructions, get_customer_summary, check_loyalty_status

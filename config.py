@@ -9,24 +9,16 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AgentConfig:
     """Configuration for agent STT, LLM, TTS, and VAD settings"""
-    # OpenAI Configuration
+    # Required fields (no defaults) - must come first
     openai_api_key: str
-    openai_model: str = "gpt-4o-mini"
-    
-    # Deepgram Configuration
     deepgram_api_key: str
-    
-    # Cartesia Configuration
     cartesia_api_key: str
+    
+    # Optional fields with defaults - must come after required fields
+    openai_model: str = "gpt-4o-mini"
     cartesia_voice_id: Optional[str] = None
-    
-    # Silero VAD (no API key needed)
     vad_model: str = "silero"
-    
-    # Firebase Configuration
     firebase_service_account_path: str = "service.json"
-    
-    # SIP Configuration
     sip_phone_number: Optional[str] = None
     sip_trunk_address: Optional[str] = None
     sip_username: Optional[str] = None

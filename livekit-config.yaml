@@ -1,6 +1,4 @@
-# LiveKit Server Configuration for Restaurant AI Assistant
-
-# Development configuration - use secure settings in production
+# Development configuration
 keys:
   devkey: secret
 
@@ -9,32 +7,22 @@ port: 7880
 bind_addresses:
   - ""
 
-# WebSocket settings  
+# WebSocket settings
 rtc:
   tcp_port: 7881
   port_range_start: 50000
   port_range_end: 60000
   use_external_ip: true
 
-# Redis for scaling (optional for development)
-# redis:
-#   address: "redis:6379"
-
-# Turn server (for NAT traversal)
 turn:
-  enabled: true
-  domain: ""
-  cert_file: ""
-  key_file: ""
-  tls_port: 5349
-  udp_port: 3478
+  enabled: false # TURN is not enabled in development mode
 
 # Room settings
 room:
   auto_create: true
   max_participants: 10
-  empty_timeout: 300s
-  departure_timeout: 20s
+  empty_timeout: 300
+  departure_timeout: 20
 
 # Webhook settings (for your backend integration)
 webhook:
@@ -47,12 +35,6 @@ logging:
   level: info
   pion_level: warn
 
-# SIP settings for FreeSWITCH integration
-sip:
-  inbound_username: ""
-  inbound_password: ""
-  outbound_address: "freeswitch:5060"
-  local_net: ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"]
 
 # Development mode settings
 development: true

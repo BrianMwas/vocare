@@ -1,7 +1,7 @@
 # main.py - LiveKit Restaurant Assistant Entrypoint with SIP Support
 import logging
 
-from livekit.agents import JobContext, WorkerOptions, AgentSession, cli, AutoSubscribe
+from livekit.agents import JobContext, WorkerOptions, AgentSession, cli, AutoSubscribe, Worker
 from livekit.plugins import groq
 from app.models.restaurant import UserData
 from manager import FirebaseManager
@@ -94,15 +94,36 @@ async def entrypoint(ctx: JobContext):
         logger.error(f"Critical error in entrypoint: {e}")
         raise
 
+def calculate_worker_load(worker: Worker) -> float:
+    """
+    Calculate the current load of the worker.
+    Return a value between 0 and 1.
+    """
+    try:
+        # Get current active jobs
+        active_jobs = len(worker.active_jobs) if hasattr(worker, 'active_jobs') else 0
+        
+        # Simple load calculation based on active jobs
+        # Adjust max_concurrent_jobs based on your server capacity
+        max_concurrent_jobs = 5
+        load = min(active_jobs / max_concurrent_jobs, 1.0)
+        
+        logger.debug(f"📊 Current worker load: {load:.2f} ({active_jobs}/{max_concurrent_jobs})")
+        return load
+        
+    except Exception as e:
+        logger.error(f"❌ Error calculating worker load: {e}")
+        return 0.5  # Return moderate load on error
 
 if __name__ == "__main__":
     # Configure CLI options for SIP support
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
-        # Enable SIP support
-        sip_enabled=True,
-        # Configure for production deployment
-        max_retry_count=3,
-        # Add logging
-        log_level="INFO"
+        load_fnc=calculate_worker_load,
+        num_idle_processes=2,  # Keep 2 processes warm
+        load_threshold=0.8,  # Mark as unavailable at 80% load
+        job_memory_warn_mb=1000,  # Warn at 1GB memory usage
+        job_memory_limit_mb=2000,  
+        max_retry=3,
+        port=8081,
     ))
