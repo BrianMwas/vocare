@@ -3,21 +3,21 @@
   <!-- FreeSWITCH Variables for Restaurant AI -->
   
   <!-- Network settings -->
-  <X-PRE-PROCESS cmd="set" data="default_password=1234"/>
-  <X-PRE-PROCESS cmd="set" data="domain=restaurant.local"/>
-  <X-PRE-PROCESS cmd="set" data="domain_name=restaurant.local"/>
-  <X-PRE-PROCESS cmd="set" data="hold_music=local_stream://moh"/>
+  <X-PRE-PROCESS cmd="set" data="default_password=$${FREESWITCH_DEFAULT_PASSWORD}"/>
+  <X-PRE-PROCESS cmd="set" data="domain=$${FREESWITCH_DOMAIN}"/>
+  <X-PRE-PROCESS cmd="set" data="domain_name=$${FREESWITCH_DOMAIN}"/>
+  <X-PRE-PROCESS cmd="set" data="hold_music=$${FREESWITCH_HOLD_MUSIC}"/>
   
   <!-- SIP settings -->
   <X-PRE-PROCESS cmd="set" data="external_rtp_ip=auto-nat"/>
   <X-PRE-PROCESS cmd="set" data="external_sip_ip=auto-nat"/>
   
   <!-- Codec preferences -->
-  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMU,PCMA,G729"/>
-  <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=PCMU,PCMA,G729"/>
+  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=G722,opus@48000h@20i,PCMA,PCMU,GSM"/>
+  <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=G722,opus@48000h@20i,PCMA,PCMU,GSM"/>
   
   <!-- Restaurant specific settings -->
-  <X-PRE-PROCESS cmd="set" data="restaurant_name=Bella's Italian Kitchen"/>
+  <X-PRE-PROCESS cmd="set" data="restaurant_name=$${RESTAURANT_NAME}"/>
   <X-PRE-PROCESS cmd="set" data="livekit_url=$${LIVEKIT_URL}"/>
   <X-PRE-PROCESS cmd="set" data="livekit_api_key=$${LIVEKIT_API_KEY}"/>
   <X-PRE-PROCESS cmd="set" data="livekit_secret=$${LIVEKIT_API_SECRET}"/>

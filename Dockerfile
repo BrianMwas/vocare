@@ -8,4 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Expose port for FreeSWITCH socket connection
+EXPOSE 8000
+
 CMD ["python", "main.py"]

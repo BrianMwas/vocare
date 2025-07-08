@@ -1,6 +1,8 @@
 # main.py - LiveKit Restaurant Assistant Entrypoint with SIP Support
 import logging
+
 from livekit.agents import JobContext, WorkerOptions, AgentSession, cli, AutoSubscribe
+from livekit.plugins import groq
 from app.models.restaurant import UserData
 from manager import FirebaseManager
 from assistant import IntentClassifierAgent
@@ -65,9 +67,13 @@ async def entrypoint(ctx: JobContext):
 
         # Start the agent session with error handling
         try:
+            
             await session.start(
                 agent=intent_classifier,  # Start with the intent classifier
                 room=ctx.room,
+                llm=groq.LLM(
+                    model="llama3-8b-8192"
+                )
             )
             
             # Always greet first for inbound calls (web sessions and inbound SIP)

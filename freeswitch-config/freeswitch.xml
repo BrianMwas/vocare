@@ -26,12 +26,12 @@
       <profiles>
         <profile name="external">
           <gateways>
-            <!-- Add your SIP provider gateway here -->
+            <!-- SIP provider gateway configuration -->
             <gateway name="restaurant-sip">
-              <param name="username" value="your-sip-username"/>
-              <param name="password" value="your-sip-password"/>
-              <param name="realm" value="your-sip-provider.com"/>
-              <param name="proxy" value="your-sip-provider.com"/>
+              <param name="username" value="$${SIP_USERNAME}"/>
+              <param name="password" value="$${SIP_PASSWORD}"/>
+              <param name="realm" value="$${SIP_REALM}"/>
+              <param name="proxy" value="$${SIP_PROXY}"/>
               <param name="register" value="true"/>
               <param name="expire-seconds" value="600"/>
               <param name="retry-seconds" value="30"/>
@@ -44,7 +44,7 @@
             <param name="sip-port" value="5060"/>
             <param name="dialplan" value="XML"/>
             <param name="dtmf-duration" value="2000"/>
-            <param name="codec-prefs" value="PCMU,PCMA"/>
+            <param name="codec-prefs" value="$${global_codec_prefs}"/>
             <param name="use-rtp-timer" value="true"/>
             <param name="rtp-timer-name" value="soft"/>
             <param name="manage-presence" value="false"/>
@@ -92,9 +92,10 @@
         <load module="mod_dialplan_xml"/>
         
         <!-- Codec modules -->
-        <load module="mod_g711"/>
-        <load module="mod_g729"/>
-        <load module="mod_amr"/>
+        <load module="mod_g711"/>    <!-- PCMA, PCMU -->
+        <load module="mod_g722"/>    <!-- G722 HD audio -->
+        <load module="mod_opus"/>    <!-- opus@48000h@20i -->
+        <load module="mod_gsm"/>     <!-- GSM codec -->
       </modules>
     </configuration>
 
