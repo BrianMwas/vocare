@@ -1,0 +1,303 @@
+# Production Environment Configuration
+# Optimized for high availability, security, and performance
+
+global:
+  namespace: vocare-restaurant
+  imageRegistry: "vocareacr.azurecr.io"
+  imagePullPolicy: IfNotPresent
+  environment: production
+
+# Backend service configuration
+backend:
+  enabled: true
+  replicaCount: 3  # High availability
+  image:
+    repository: vocare-backend
+    tag: "v1.0.0"  # Specific version tag
+  service:
+    type: ClusterIP
+    port: 8000
+    agentPort: 8081
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Production environment variables
+  env:
+    LOG_LEVEL: "INFO"
+    DEBUG_MODE: "false"
+    ENABLE_PROFILING: "false"
+    MOCK_EXTERNAL_APIS: "false"
+    WORKER_PROCESSES: "4"
+    MAX_CONNECTIONS: "1000"
+
+  # Production-specific configurations
+  priorityClassName: "vocare-critical"
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+# LiveKit server configuration
+livekit:
+  enabled: true
+  replicaCount: 2  # Redundancy
+  image:
+    repository: livekit/livekit-server
+    tag: "v1.5.0"  # Specific stable version
+  service:
+    type: LoadBalancer
+    port: 7880
+    tlsPort: 7881
+    turnPort: 7882
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+  # Production LiveKit configuration
+  config:
+    development: false
+    logLevel: "info"
+    maxParticipants: 50
+    roomTimeout: 300
+    departureTimeout: 20
+
+  # High availability settings
+  priorityClassName: "vocare-critical"
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# FreeSWITCH configuration
+freeswitch:
+  enabled: true
+  replicaCount: 2  # Active-passive setup
+  image:
+    repository: safarov/freeswitch
+    tag: "1.10.9"  # Specific stable version
+  service:
+    type: LoadBalancer
+    sipPort: 5060
+    sipAltPort: 5080
+    eventSocketPort: 8021
+
+  # Full RTP port range for production
+  rtp:
+    portRangeStart: 30000
+    portRangeEnd: 30100
+
+  hostNetwork: true  # Better performance for telephony
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+  # Production telephony settings
+  priorityClassName: "vocare-high"
+  nodeSelector:
+    vocare.com/telephony: "true"
+  tolerations:
+  - key: "vocare.com/freeswitch"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+# Configuration management
+config:
+  # Application settings
+  openaiModel: "gpt-4o-mini"
+  restaurantName: "Vocare Restaurant"
+  freeswitchDomain: "vocare.com"
+  freeswitchLogLevel: "INFO"
+
+  # LiveKit settings
+  livekitUrl: "wss://livekit.vocare.com"
+
+  # Performance settings
+  maxConcurrentCalls: 100
+  callTimeout: 300
+  sessionTimeout: 1800
+
+# Secrets management
+secrets:
+  # Use Azure Key Vault for production (recommended)
+  useAzureKeyVault: true
+  useKubernetesSecrets: false
+
+  # Key Vault configuration
+  keyVaultName: "vocare-kv"
+  secretProviderClass: "vocare-keyvault-secrets"
+
+# Azure-specific configuration
+azure:
+  workloadIdentity:
+    enabled: true
+    clientId: "your-managed-identity-client-id"
+
+  # Production storage
+  storageAccount: "vocare-prod-storage"
+
+  # Container Registry
+  acr:
+    name: "vocareacr"
+
+  # Key Vault
+  keyVault:
+    name: "vocare-kv"
+
+# Networking
+networking:
+  # Strict network policies for production
+  networkPolicies:
+    enabled: true
+    defaultDeny: true
+
+  # Production ingress with TLS
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/rate-limit: "100"
+      nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: vocare.com
+        paths:
+          - path: /
+            pathType: Prefix
+      - host: livekit.vocare.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: vocare-tls-secret
+        hosts:
+          - vocare.com
+          - livekit.vocare.com
+
+# Monitoring and observability
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    retention: "30d"
+    storageSize: "100Gi"
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      size: "10Gi"
+
+  # Production monitoring settings
+  logLevel: "info"
+  metricsInterval: "15s"
+  alerting:
+    enabled: true
+    channels:
+      - slack
+      - email
+      - pagerduty
+
+  # Application Insights
+  applicationInsights:
+    enabled: true
+    instrumentationKey: "your-app-insights-key"
+
+# Security settings
+security:
+  # Pod Security Standards
+  podSecurityStandards: "restricted"
+
+  # Security contexts
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+  # Network security
+  networkPolicies:
+    enabled: true
+    defaultDeny: true
+
+  # RBAC
+  rbac:
+    enabled: true
+    serviceAccount:
+      create: true
+      name: "vocare-prod-sa"
+
+# Resource quotas (production limits)
+resourceQuota:
+  enabled: true
+  limits:
+    cpu: "20"
+    memory: "40Gi"
+    storage: "500Gi"
+    pods: "50"
+    services: "20"
+    persistentvolumeclaims: "20"
+
+# Backup and disaster recovery
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: "30d"
+  destinations:
+    - azureStorage
+    - azureBackup
+
+# Performance optimization
+performance:
+  # CPU and memory optimization
+  cpuManager: "static"
+  memoryManager: "static"
+
+  # Network optimization
+  networkOptimization:
+    enabled: true
+    tcpOptimization: true
+    udpBufferSize: "16MB"
+
+  # Storage optimization
+  storageClass: "premium-ssd"
+
+# Node selection and affinity
+nodeSelector:
+  kubernetes.io/instance-type: "Standard_D4s_v3"
+
+# Anti-affinity for high availability
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values:
+          - vocare-backend
+      topologyKey: kubernetes.io/hostname
+
+# Tolerations for dedicated nodes
+tolerations:
+- key: "vocare.com/production"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"

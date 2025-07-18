@@ -1,0 +1,157 @@
+# Azure DevOps Pipeline for Vocare Restaurant Assistant
+# Deploy to Azure Kubernetes Service (AKS)
+
+trigger:
+  branches:
+    include:
+    - main
+    - develop
+
+variables:
+  # Azure configuration
+  azureSubscription: 'your-azure-service-connection'
+  resourceGroup: 'vocare-restaurant-rg'
+  aksCluster: 'vocare-aks'
+  acrName: 'your-acr-name'
+
+  # Application configuration
+  containerName: 'vocare-backend'
+  helmChartPath: './helm/vocare-restaurant'
+
+  # Build configuration
+  dockerfilePath: 'Dockerfile.prod'
+  buildContext: '.'
+
+stages:
+- stage: Build
+  displayName: 'Build and Push Image'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Docker Image'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Build and Push to ACR'
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # Login to ACR
+          az acr login --name $(acrName)
+
+          # Create production Dockerfile if needed
+          if [ ! -f "$(dockerfilePath)" ]; then
+            cp Dockerfile $(dockerfilePath)
+          fi
+
+          # Build and push image
+          IMAGE_TAG=$(Build.BuildNumber)
+          FULL_IMAGE_NAME=$(acrName).azurecr.io/$(containerName):$IMAGE_TAG
+
+          echo "Building image: $FULL_IMAGE_NAME"
+          az acr build --registry $(acrName) --image $(containerName):$IMAGE_TAG --file $(dockerfilePath) $(buildContext)
+
+          # Tag as latest for main branch
+          if [ "$(Build.SourceBranch)" = "refs/heads/main" ]; then
+            az acr import --name $(acrName) --source $(acrName).azurecr.io/$(containerName):$IMAGE_TAG --image $(containerName):latest
+          fi
+
+          echo "##vso[task.setvariable variable=imageTag;isOutput=true]$IMAGE_TAG"
+          echo "##vso[task.setvariable variable=fullImageName;isOutput=true]$FULL_IMAGE_NAME"
+      name: buildStep
+
+- stage: DeployDev
+  displayName: 'Deploy to Development'
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
+  dependsOn: Build
+  variables:
+    imageTag: $[ stageDependencies.Build.BuildJob.outputs['buildStep.imageTag'] ]
+    fullImageName: $[ stageDependencies.Build.BuildJob.outputs['buildStep.fullImageName'] ]
+
+  jobs:
+  - deployment: DeployToDev
+    displayName: 'Deploy to Development Environment'
+    environment: 'vocare-dev'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureCLI@2
+            displayName: 'Deploy to AKS Dev'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Get AKS credentials
+                az aks get-credentials --resource-group $(resourceGroup) --name $(aksCluster)
+
+                # Update deployment image
+                kubectl set image deployment/backend-deployment vocare-backend=$(fullImageName) -n vocare-restaurant
+
+                # Wait for rollout
+                kubectl rollout status deployment/backend-deployment -n vocare-restaurant --timeout=300s
+
+                # Verify deployment
+                kubectl get pods -n vocare-restaurant -l app=vocare-backend
+
+- stage: DeployProd
+  displayName: 'Deploy to Production'
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  dependsOn: Build
+  variables:
+    imageTag: $[ stageDependencies.Build.BuildJob.outputs['buildStep.imageTag'] ]
+
+  jobs:
+  - deployment: DeployToProd
+    displayName: 'Deploy to Production Environment'
+    environment: 'vocare-prod'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: HelmDeploy@0
+            displayName: 'Deploy with Helm'
+            inputs:
+              connectionType: 'Azure Resource Manager'
+              azureSubscription: $(azureSubscription)
+              azureResourceGroup: $(resourceGroup)
+              kubernetesCluster: $(aksCluster)
+              namespace: 'vocare-restaurant'
+              command: 'upgrade'
+              chartType: 'FilePath'
+              chartPath: $(helmChartPath)
+              releaseName: 'vocare-restaurant'
+              arguments: |
+                --create-namespace
+                --set backend.image.tag=$(imageTag)
+                --set global.imageRegistry=$(acrName).azurecr.io
+                --wait --timeout=10m
+
+          - task: AzureCLI@2
+            displayName: 'Health Check'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Get AKS credentials
+                az aks get-credentials --resource-group $(resourceGroup) --name $(aksCluster)
+
+                # Wait for pods to be ready
+                kubectl wait --for=condition=ready pod -l app=vocare-backend -n vocare-restaurant --timeout=300s
+
+                # Check services
+                kubectl get services -n vocare-restaurant
+
+                # Basic health check
+                echo "Deployment completed successfully!"

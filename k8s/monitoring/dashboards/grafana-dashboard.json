@@ -1,0 +1,205 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Vocare Restaurant Assistant - Production Dashboard",
+    "tags": ["vocare", "restaurant", "telephony", "aks"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{namespace=\"vocare-restaurant\"}",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Active Calls",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "vocare_active_calls_total",
+            "legendFormat": "Active Calls"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{namespace=\"vocare-restaurant\"}[5m]) * 100",
+            "legendFormat": "{{pod}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "percent"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{namespace=\"vocare-restaurant\"} / 1024 / 1024",
+            "legendFormat": "{{pod}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "MB"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{namespace=\"vocare-restaurant\"}[5m])",
+            "legendFormat": "{{method}} {{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 6,
+        "title": "Response Time",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{namespace=\"vocare-restaurant\"}[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{namespace=\"vocare-restaurant\"}[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "s"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "SIP Call Metrics",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "vocare_sip_calls_total",
+            "legendFormat": "Total Calls"
+          },
+          {
+            "expr": "vocare_sip_calls_active",
+            "legendFormat": "Active Calls"
+          },
+          {
+            "expr": "vocare_sip_calls_failed_total",
+            "legendFormat": "Failed Calls"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32}
+      },
+      {
+        "id": 8,
+        "title": "LiveKit Participants",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "livekit_participants_total",
+            "legendFormat": "Total Participants"
+          },
+          {
+            "expr": "livekit_rooms_active",
+            "legendFormat": "Active Rooms"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40}
+      },
+      {
+        "id": 9,
+        "title": "Error Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{namespace=\"vocare-restaurant\",status=~\"5..\"}[5m])",
+            "legendFormat": "5xx Errors"
+          },
+          {
+            "expr": "rate(http_requests_total{namespace=\"vocare-restaurant\",status=~\"4..\"}[5m])",
+            "legendFormat": "4xx Errors"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

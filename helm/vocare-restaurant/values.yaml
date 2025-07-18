@@ -1,0 +1,151 @@
+# Default values for vocare-restaurant
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  namespace: vocare-restaurant
+  imageRegistry: "your-acr-registry.azurecr.io"
+  imagePullPolicy: IfNotPresent
+
+# Backend service configuration
+backend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: vocare-backend
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 8000
+    agentPort: 8081
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+
+# LiveKit server configuration
+livekit:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: livekit/livekit-server
+    tag: "latest"
+  service:
+    type: LoadBalancer
+    port: 7880
+    tlsPort: 7881
+    turnPort: 7882
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# FreeSWITCH configuration
+freeswitch:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: safarov/freeswitch
+    tag: "latest"
+  service:
+    type: LoadBalancer
+    sipPort: 5060
+    sipAltPort: 5080
+    eventSocketPort: 8021
+  # RTP configuration
+  rtp:
+    portRangeStart: 30000
+    portRangeEnd: 30010
+  # Use host networking for better RTP support
+  hostNetwork: false
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Configuration management
+config:
+  # Application settings
+  openaiModel: "gpt-4o-mini"
+  restaurantName: "Vocare Restaurant"
+  freeswitchDomain: "vocare.local"
+  freeswitchLogLevel: "INFO"
+
+  # LiveKit settings
+  livekitUrl: "ws://livekit-service:7880"
+
+# Secrets management
+secrets:
+  # Use Azure Key Vault
+  useAzureKeyVault: true
+  keyVaultName: ""
+
+  # Or use Kubernetes secrets (for development)
+  useKubernetesSecrets: false
+
+# Azure-specific configuration
+azure:
+  # Workload Identity
+  workloadIdentity:
+    enabled: true
+    clientId: ""
+
+  # Storage
+  storageAccount: ""
+
+  # Container Registry
+  acr:
+    name: ""
+
+# Networking
+networking:
+  # Network policies
+  networkPolicies:
+    enabled: true
+
+  # Ingress
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: vocare.yourdomain.com
+        paths:
+          - path: /
+            pathType: Prefix
+      - host: livekit.yourdomain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: vocare-tls-secret
+        hosts:
+          - vocare.yourdomain.com
+          - livekit.yourdomain.com
+
+# Monitoring and observability
+monitoring:
+  enabled: false
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+
+# Node selection and tolerations
+nodeSelector: {}
+tolerations: []
+affinity: {}

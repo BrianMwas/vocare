@@ -1,0 +1,109 @@
+# Backend Deployment with Azure Key Vault Integration
+# This version uses Azure Key Vault Secrets Provider for enhanced security
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: vocare-restaurant
+  labels:
+    app: vocare-backend
+    version: keyvault
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vocare-backend
+
+  template:
+    metadata:
+      labels:
+        app: vocare-backend
+
+    spec:
+      serviceAccountName: vocare-workload-identity  # For Azure Workload Identity
+      containers:
+      - name: vocare-backend
+        image: "vocareacr.azurecr.io/vocare-backend:latest"
+        ports:
+        - containerPort: 8000
+          name: freeswitch-api
+        - containerPort: 8081
+          name: livekit-agent
+        env:
+        # API Keys from Azure Key Vault (via auto-created Kubernetes secrets)
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: openai-api-key
+        - name: DEEPGRAM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: deepgram-api-key
+        - name: CARTESIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: cartesia-api-key
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: livekit-api-key
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: livekit-api-secret
+        # Configuration from ConfigMap
+        - name: OPENAI_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: OPENAI_MODEL
+        - name: FIREBASE_SERVICE_ACCOUNT_PATH
+          value: "/mnt/secrets-store/firebase-service-account-json"
+        - name: LIVEKIT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: LIVEKIT_URL
+        volumeMounts:
+        - name: keyvault-secrets
+          mountPath: /mnt/secrets-store
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: keyvault-secrets
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: vocare-keyvault-secrets

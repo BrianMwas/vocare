@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: freeswitch-service
+  namespace: vocare-restaurant
+  labels:
+    app: freeswitch-server
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-external-subnet: "default"
+spec:
+  selector:
+    app: freeswitch-server
+  ports:
+  - name: sip-udp
+    port: 5060
+    targetPort: 5060
+    protocol: UDP
+  - name: sip-alt-udp
+    port: 5080
+    targetPort: 5080
+    protocol: UDP
+  - name: event-socket
+    port: 8021
+    targetPort: 8021
+    protocol: TCP
+  type: LoadBalancer
+
+---
+# RTP Media Service - This is challenging due to port range requirements
+# Consider using NodePort or multiple services for RTP ports
+apiVersion: v1
+kind: Service
+metadata:
+  name: freeswitch-rtp-service
+  namespace: vocare-restaurant
+  labels:
+    app: freeswitch-server
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-external-subnet: "default"
+spec:
+  selector:
+    app: freeswitch-server
+  ports:
+  # RTP port range - this is a simplified version
+  # In production, you might need multiple services or NodePort
+  - name: rtp-30000
+    port: 30000
+    targetPort: 30000
+    protocol: UDP
+  - name: rtp-30001
+    port: 30001
+    targetPort: 30001
+    protocol: UDP
+  - name: rtp-30002
+    port: 30002
+    targetPort: 30002
+    protocol: UDP
+  - name: rtp-30003
+    port: 30003
+    targetPort: 30003
+    protocol: UDP
+  - name: rtp-30004
+    port: 30004
+    targetPort: 30004
+    protocol: UDP
+  - name: rtp-30005
+    port: 30005
+    targetPort: 30005
+    protocol: UDP
+  - name: rtp-30006
+    port: 30006
+    targetPort: 30006
+    protocol: UDP
+  - name: rtp-30007
+    port: 30007
+    targetPort: 30007
+    protocol: UDP
+  - name: rtp-30008
+    port: 30008
+    targetPort: 30008
+    protocol: UDP
+  - name: rtp-30009
+    port: 30009
+    targetPort: 30009
+    protocol: UDP
+  - name: rtp-30010
+    port: 30010
+    targetPort: 30010
+    protocol: UDP
+  type: LoadBalancer
+
+---
+# Internal service for cluster communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: freeswitch-internal
+  namespace: vocare-restaurant
+  labels:
+    app: freeswitch-server
+spec:
+  selector:
+    app: freeswitch-server
+  ports:
+  - name: event-socket
+    port: 8021
+    targetPort: 8021
+    protocol: TCP
+  type: ClusterIP

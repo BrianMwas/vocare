@@ -1,0 +1,49 @@
+# Azure Storage Classes for Vocare Restaurant Assistant
+# These define different storage options for persistent volumes
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vocare-fast-ssd
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Premium_LRS
+  kind: Managed
+  cachingmode: ReadOnly
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vocare-standard
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: Standard_LRS
+  kind: Managed
+  cachingmode: ReadOnly
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Azure Files storage class for shared storage
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vocare-files
+provisioner: file.csi.azure.com
+parameters:
+  skuName: Standard_LRS
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+mountOptions:
+  - dir_mode=0755
+  - file_mode=0644
+  - uid=1000
+  - gid=1000
+  - mfsymlinks
+  - nobrl

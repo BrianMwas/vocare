@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: freeswitch-config
+  namespace: vocare-restaurant
+data:
+  freeswitch.xml: |
+    <?xml version="1.0"?>
+    <document type="freeswitch/xml">
+
+      <section name="configuration" description="Various Configuration">
+
+        <!-- Event Socket (for LiveKit integration) -->
+        <configuration name="event_socket.conf" description="Socket Client">
+          <settings>
+            <param name="nat-map" value="false"/>
+            <param name="listen-ip" value="0.0.0.0"/>
+            <param name="listen-port" value="8021"/>
+            <param name="password" value="ClueCon"/>
+            <param name="apply-inbound-acl" value="loopback.auto"/>
+            <param name="stop-on-bind-error" value="true"/>
+          </settings>
+        </configuration>
+
+        <!-- SIP Profile for incoming calls -->
+        <configuration name="sofia.conf" description="sofia Endpoint">
+          <global_settings>
+            <param name="log-level" value="0"/>
+            <param name="abort-on-empty-external-ip" value="true"/>
+            <param name="auto-restart" value="false"/>
+          </global_settings>
+
+          <profiles>
+            <profile name="external">
+              <gateways>
+                <!-- SIP provider gateway configuration -->
+                <gateway name="restaurant-sip">
+                  <param name="username" value="${SIP_USERNAME}"/>
+                  <param name="password" value="${SIP_PASSWORD}"/>
+                  <param name="realm" value="${SIP_REALM}"/>
+                  <param name="proxy" value="${SIP_PROXY}"/>
+                  <param name="register" value="true"/>
+                  <param name="expire-seconds" value="600"/>
+                  <param name="retry-seconds" value="30"/>
+                </gateway>
+              </gateways>
+
+              <settings>
+                <param name="context" value="public"/>
+                <param name="rfc2833-pt" value="101"/>
+                <param name="sip-port" value="5060"/>
+                <param name="dialplan" value="XML"/>
+                <param name="dtmf-duration" value="2000"/>
+                <param name="codec-prefs" value="G722,opus@48000h@20i,PCMA,PCMU,GSM"/>
+                <param name="use-rtp-timer" value="true"/>
+                <param name="rtp-timer-name" value="soft"/>
+                <param name="manage-presence" value="false"/>
+                <param name="inbound-codec-negotiation" value="generous"/>
+                <param name="nonce-ttl" value="60"/>
+                <param name="auth-calls" value="false"/>
+                <param name="inbound-late-negotiation" value="true"/>
+                <param name="inbound-zrtp-passthru" value="true"/>
+                <param name="rtp-ip" value="auto-nat"/>
+                <param name="sip-ip" value="auto-nat"/>
+                <param name="ext-rtp-ip" value="auto-nat"/>
+                <param name="ext-sip-ip" value="auto-nat"/>
+                <param name="rtp-timeout-sec" value="300"/>
+                <param name="rtp-hold-timeout-sec" value="1800"/>
+                <param name="minimum-session-expires" value="120"/>
+                <param name="apply-nat-acl" value="nat.auto"/>
+                <param name="aggressive-nat-detection" value="true"/>
+              </settings>
+            </profile>
+          </profiles>
+        </configuration>
+
+        <!-- Switch Configuration -->
+        <configuration name="switch.conf" description="Core Configuration">
+          <settings>
+            <param name="colorize-console" value="true"/>
+            <param name="max-sessions" value="1000"/>
+            <param name="sessions-per-second" value="30"/>
+            <param name="loglevel" value="info"/>
+            <param name="dump-cores" value="yes"/>
+          </settings>
+        </configuration>
+
+      </section>
+
+      <!-- Dialplan for routing calls to LiveKit -->
+      <section name="dialplan" description="Regex/XML Dialplan">
+        <context name="public">
+
+          <!-- Route incoming calls to restaurant assistant -->
+          <extension name="restaurant-assistant">
+            <condition field="destination_number" expression="^(restaurant|${RESTAURANT_PHONE_NUMBER})$">
+              <action application="answer"/>
+              <action application="sleep" data="1000"/>
+              <action application="set" data="call_direction=inbound"/>
+              <action application="set" data="restaurant_call=true"/>
+              <!-- This will be handled by LiveKit SIP integration -->
+              <action application="socket" data="backend-service:8000 async full"/>
+            </condition>
+          </extension>
+
+          <!-- Default handler for unmatched calls -->
+          <extension name="unmatched">
+            <condition field="destination_number" expression="^.*$">
+              <action application="answer"/>
+              <action application="playback" data="tone_stream://%(400,200,400,450);%(400,2000,400,450)"/>
+              <action application="hangup"/>
+            </condition>
+          </extension>
+
+        </context>
+      </section>
+
+    </document>
+
+  vars.xml: |
+    <?xml version="1.0"?>
+    <include>
+      <!-- FreeSWITCH Variables for Restaurant AI -->
+
+      <!-- Network settings -->
+      <X-PRE-PROCESS cmd="set" data="default_password=${FREESWITCH_DEFAULT_PASSWORD}"/>
+      <X-PRE-PROCESS cmd="set" data="domain=${FREESWITCH_DOMAIN}"/>
+      <X-PRE-PROCESS cmd="set" data="domain_name=${FREESWITCH_DOMAIN}"/>
+      <X-PRE-PROCESS cmd="set" data="hold_music=${FREESWITCH_HOLD_MUSIC}"/>
+
+      <!-- SIP settings -->
+      <X-PRE-PROCESS cmd="set" data="external_rtp_ip=auto-nat"/>
+      <X-PRE-PROCESS cmd="set" data="external_sip_ip=auto-nat"/>
+
+      <!-- Codec preferences -->
+      <X-PRE-PROCESS cmd="set" data="global_codec_prefs=G722,opus@48000h@20i,PCMA,PCMU,GSM"/>
+      <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=G722,opus@48000h@20i,PCMA,PCMU,GSM"/>
+
+      <!-- Restaurant specific -->
+      <X-PRE-PROCESS cmd="set" data="restaurant_name=${RESTAURANT_NAME}"/>
+
+    </include>
