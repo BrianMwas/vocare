@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vocare-restaurant
+  labels:
+    app: vocare-restaurant
+    environment: production

@@ -1,0 +1,241 @@
+# Fluentd Configuration for Vocare Restaurant Assistant
+# Advanced log aggregation and forwarding to Azure Log Analytics
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: vocare-restaurant
+data:
+  fluent.conf: |
+    # Input sources
+    <source>
+      @type tail
+      @id vocare_backend_logs
+      path /var/log/containers/*vocare-backend*.log
+      pos_file /var/log/fluentd-vocare-backend.log.pos
+      tag vocare.backend
+      format json
+      time_format %Y-%m-%dT%H:%M:%S.%NZ
+    </source>
+
+    <source>
+      @type tail
+      @id livekit_logs
+      path /var/log/containers/*livekit*.log
+      pos_file /var/log/fluentd-livekit.log.pos
+      tag vocare.livekit
+      format json
+      time_format %Y-%m-%dT%H:%M:%S.%NZ
+    </source>
+
+    <source>
+      @type tail
+      @id freeswitch_logs
+      path /var/log/containers/*freeswitch*.log
+      pos_file /var/log/fluentd-freeswitch.log.pos
+      tag vocare.freeswitch
+      format json
+      time_format %Y-%m-%dT%H:%M:%S.%NZ
+    </source>
+
+    # Kubernetes metadata enrichment
+    <filter vocare.**>
+      @type kubernetes_metadata
+      @id filter_kube_metadata
+      kubernetes_url "#{ENV['KUBERNETES_SERVICE_HOST']}:#{ENV['KUBERNETES_SERVICE_PORT_HTTPS']}"
+      verify_ssl "#{ENV['KUBERNETES_VERIFY_SSL'] || true}"
+      ca_file "#{ENV['KUBERNETES_CA_FILE']}"
+      skip_labels false
+      skip_container_metadata false
+      skip_master_url false
+      skip_namespace_metadata false
+    </filter>
+
+    # Parse application logs
+    <filter vocare.backend>
+      @type parser
+      key_name log
+      reserve_data true
+      <parse>
+        @type json
+        time_key timestamp
+        time_format %Y-%m-%dT%H:%M:%S.%fZ
+      </parse>
+    </filter>
+
+    # Add custom fields for Vocare
+    <filter vocare.**>
+      @type record_transformer
+      <record>
+        application vocare-restaurant
+        environment production
+        cluster_name "#{ENV['CLUSTER_NAME']}"
+        region "#{ENV['AZURE_REGION']}"
+      </record>
+    </filter>
+
+    # SIP call log parsing
+    <filter vocare.freeswitch>
+      @type parser
+      key_name log
+      reserve_data true
+      <parse>
+        @type regexp
+        expression /^(?<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}) \[(?<level>\w+)\] (?<module>\w+) (?<message>.*)/
+        time_key timestamp
+        time_format %Y-%m-%d %H:%M:%S.%f
+      </parse>
+    </filter>
+
+    # Error detection and alerting
+    <filter vocare.**>
+      @type grep
+      <regexp>
+        key level
+        pattern ^(ERROR|CRITICAL|FATAL)$
+      </regexp>
+      <record>
+        alert_required true
+        severity high
+      </record>
+    </filter>
+
+    # Performance metrics extraction
+    <filter vocare.backend>
+      @type parser
+      key_name log
+      reserve_data true
+      <parse>
+        @type regexp
+        expression /response_time=(?<response_time>\d+\.?\d*)ms.*status=(?<status_code>\d+)/
+        types response_time:float,status_code:integer
+      </parse>
+    </filter>
+
+    # Output to Azure Log Analytics
+    <match vocare.**>
+      @type azure-loganalytics
+      @id azure_loganalytics
+      customer_id "#{ENV['AZURE_LOG_ANALYTICS_WORKSPACE_ID']}"
+      shared_key "#{ENV['AZURE_LOG_ANALYTICS_WORKSPACE_KEY']}"
+      log_type VocareApplicationLogs
+      add_time_field true
+      time_field_name timestamp
+      localtime false
+      <buffer>
+        @type file
+        path /var/log/fluentd-buffers/azure.buffer
+        flush_mode interval
+        flush_interval 30s
+        chunk_limit_size 10m
+        queue_limit_length 32
+        retry_max_interval 30
+        retry_forever true
+      </buffer>
+    </match>
+
+    # Output errors to separate log type for alerting
+    <match vocare.** if alert_required>
+      @type azure-loganalytics
+      @id azure_loganalytics_alerts
+      customer_id "#{ENV['AZURE_LOG_ANALYTICS_WORKSPACE_ID']}"
+      shared_key "#{ENV['AZURE_LOG_ANALYTICS_WORKSPACE_KEY']}"
+      log_type VocareAlerts
+      add_time_field true
+      time_field_name timestamp
+      localtime false
+      <buffer>
+        @type file
+        path /var/log/fluentd-buffers/alerts.buffer
+        flush_mode immediate
+        chunk_limit_size 1m
+        queue_limit_length 8
+        retry_max_interval 10
+        retry_forever true
+      </buffer>
+    </match>
+
+    # Backup output to file for debugging
+    <match vocare.**>
+      @type file
+      @id output_file
+      path /var/log/fluentd-outputs/vocare
+      append true
+      time_slice_format %Y%m%d
+      time_slice_wait 10m
+      time_format %Y-%m-%dT%H:%M:%S.%NZ
+      <buffer>
+        timekey 1h
+        timekey_wait 10m
+        flush_mode interval
+        flush_interval 30s
+      </buffer>
+    </match>
+
+---
+# Fluentd DaemonSet for log collection
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd-vocare
+  namespace: vocare-restaurant
+  labels:
+    app: fluentd-vocare
+spec:
+  selector:
+    matchLabels:
+      app: fluentd-vocare
+  template:
+    metadata:
+      labels:
+        app: fluentd-vocare
+    spec:
+      serviceAccountName: fluentd
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: fluentd
+        image: fluent/fluentd-kubernetes-daemonset:v1-debian-elasticsearch
+        env:
+        - name: AZURE_LOG_ANALYTICS_WORKSPACE_ID
+          valueFrom:
+            secretKeyRef:
+              name: azure-monitor-config
+              key: workspace-id
+        - name: AZURE_LOG_ANALYTICS_WORKSPACE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: azure-monitor-config
+              key: workspace-key
+        - name: CLUSTER_NAME
+          value: "vocare-aks"
+        - name: AZURE_REGION
+          value: "eastus"
+        resources:
+          limits:
+            memory: 512Mi
+            cpu: 200m
+          requests:
+            memory: 256Mi
+            cpu: 100m
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        - name: fluentd-config
+          mountPath: /fluentd/etc/fluent.conf
+          subPath: fluent.conf
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: fluentd-config
+        configMap:
+          name: fluentd-config

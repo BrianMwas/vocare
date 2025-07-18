@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: freeswitch-deployment
+  namespace: vocare-restaurant
+  labels:
+    app: freeswitch-server
+spec:
+  replicas: 1  # FreeSWITCH typically runs as single instance
+  selector:
+    matchLabels:
+      app: freeswitch-server
+  template:
+    metadata:
+      labels:
+        app: freeswitch-server
+    spec:
+      # Security context for FreeSWITCH capabilities
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: freeswitch-server
+        image: safarov/freeswitch:latest
+        ports:
+        - containerPort: 5060
+          name: sip-udp
+          protocol: UDP
+        - containerPort: 5080
+          name: sip-alt-udp
+          protocol: UDP
+        - containerPort: 8021
+          name: event-socket
+          protocol: TCP
+        # RTP port range - this is a challenge in Kubernetes
+        # Consider using a smaller range or NodePort services
+        env:
+        - name: SOUND_RATES
+          value: "8000,16000"
+        - name: SOUND_TYPES
+          value: "wav"
+        - name: FREESWITCH_LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: FREESWITCH_LOG_LEVEL
+        - name: FREESWITCH_DEFAULT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: vocare-freeswitch-secrets
+              key: default-password
+        - name: FREESWITCH_DOMAIN
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: FREESWITCH_DOMAIN
+        - name: FREESWITCH_HOLD_MUSIC
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: FREESWITCH_HOLD_MUSIC
+        - name: RESTAURANT_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: RESTAURANT_NAME
+        - name: FREESWITCH_EXTERNAL_RTP_PORT_MIN
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: FREESWITCH_EXTERNAL_RTP_PORT_MIN
+        - name: FREESWITCH_EXTERNAL_RTP_PORT_MAX
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: FREESWITCH_EXTERNAL_RTP_PORT_MAX
+        # LiveKit integration
+        - name: LIVEKIT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: LIVEKIT_URL
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: livekit-api-key
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: livekit-api-secret
+        # SIP provider configuration
+        - name: SIP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: vocare-sip-secrets
+              key: sip-username
+        - name: SIP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: vocare-sip-secrets
+              key: sip-password
+        - name: SIP_REALM
+          valueFrom:
+            secretKeyRef:
+              name: vocare-sip-secrets
+              key: sip-realm
+        - name: SIP_PROXY
+          valueFrom:
+            secretKeyRef:
+              name: vocare-sip-secrets
+              key: sip-proxy
+        volumeMounts:
+        - name: freeswitch-config
+          mountPath: /etc/freeswitch
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        # Security context for capabilities
+        securityContext:
+          capabilities:
+            add:
+            - SYS_NICE
+          # Note: privileged: true might be needed for full FreeSWITCH functionality
+          # privileged: true
+        livenessProbe:
+          tcpSocket:
+            port: 8021
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 8021
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: freeswitch-config
+        configMap:
+          name: freeswitch-config

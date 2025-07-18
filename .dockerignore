@@ -1,7 +1,66 @@
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
 venv/
-*.pyc
-*.pyo
-*.pyd
+env/
+.env
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README*.md
+docs/
+*.md
+
+# Kubernetes and deployment files
+k8s/
+helm/
+azure/
+environments/
+scripts/
+
+# CI/CD
+.github/
+azure-pipelines.yml
+
+# Logs and databases
+*.log
 *.db
+*.sqlite
+
+# Secrets and credentials
 serviceAccountKey.json
+service.json
+*.pem
+*.key
+.env.*
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Backup files
+*.bak
+*.backup

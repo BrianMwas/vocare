@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vocare-config
+  namespace: vocare-restaurant
+data:
+  # Application configuration
+  OPENAI_MODEL: "gpt-4o-mini"
+  FIREBASE_SERVICE_ACCOUNT_PATH: "/app/secrets/service-account.json"
+
+  # LiveKit configuration
+  LIVEKIT_URL: "ws://livekit-service:7880"
+
+  # Restaurant configuration
+  RESTAURANT_NAME: "Vocare Restaurant"
+  FREESWITCH_DOMAIN: "vocare.local"
+  FREESWITCH_HOLD_MUSIC: "local_stream://moh"
+
+  # Network configuration
+  FREESWITCH_EXTERNAL_RTP_PORT_MIN: "30000"
+  FREESWITCH_EXTERNAL_RTP_PORT_MAX: "30010"
+
+  # Logging
+  FREESWITCH_LOG_LEVEL: "INFO"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-config
+  namespace: vocare-restaurant
+data:
+  livekit.yaml: |
+    # Production LiveKit configuration
+    keys:
+      # Will be overridden by environment variables
+      prodkey: secret
+
+    # Network settings
+    port: 7880
+    bind_addresses:
+      - ""
+
+    # WebSocket settings
+    rtc:
+      tcp_port: 7881
+      port_range_start: 16384
+      port_range_end: 16394
+      use_external_ip: true
+
+    turn:
+      enabled: true
+      domain: ""
+      cert_file: ""
+      key_file: ""
+
+    # Room settings
+    room:
+      auto_create: true
+      max_participants: 10
+      empty_timeout: 300
+      departure_timeout: 20
+
+    # Webhook settings
+    webhook:
+      api_key: prodkey
+      urls:
+        - http://backend-service:8000/webhook
+
+    # Logging
+    logging:
+      level: info
+      pion_level: warn
+
+    # Production mode
+    development: false

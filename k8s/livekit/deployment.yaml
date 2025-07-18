@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-deployment
+  namespace: vocare-restaurant
+  labels:
+    app: livekit-server
+spec:
+  replicas: 1  # LiveKit typically runs as single instance
+  selector:
+    matchLabels:
+      app: livekit-server
+  template:
+    metadata:
+      labels:
+        app: livekit-server
+    spec:
+      containers:
+      - name: livekit-server
+        image: livekit/livekit-server:latest
+        ports:
+        - containerPort: 7880
+          name: websocket
+        - containerPort: 7881
+          name: websocket-tls
+        - containerPort: 7882
+          name: turn-udp
+          protocol: UDP
+        env:
+        - name: LIVEKIT_CONFIG
+          value: "/etc/livekit.yaml"
+        - name: LIVEKIT_KEYS
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: livekit-api-key
+        - name: LIVEKIT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: vocare-api-secrets
+              key: livekit-api-secret
+        volumeMounts:
+        - name: livekit-config
+          mountPath: /etc/livekit.yaml
+          subPath: livekit.yaml
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 7880
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 7880
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: livekit-config
+        configMap:
+          name: livekit-config

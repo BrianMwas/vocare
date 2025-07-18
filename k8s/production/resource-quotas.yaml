@@ -1,0 +1,127 @@
+# Production Resource Quotas and Limits
+# These ensure proper resource allocation and prevent resource exhaustion
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: vocare-resource-quota
+  namespace: vocare-restaurant
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+
+    # Storage resources
+    requests.storage: 100Gi
+    persistentvolumeclaims: "10"
+
+    # Object counts
+    pods: "20"
+    services: "10"
+    secrets: "20"
+    configmaps: "20"
+
+    # Load balancers (expensive in Azure)
+    services.loadbalancers: "3"
+
+---
+# Limit Range for individual pods
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: vocare-limit-range
+  namespace: vocare-restaurant
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    max:
+      cpu: "2"
+      memory: 2Gi
+    min:
+      cpu: 50m
+      memory: 64Mi
+  - type: Pod
+    max:
+      cpu: "4"
+      memory: 4Gi
+  - type: PersistentVolumeClaim
+    max:
+      storage: 50Gi
+    min:
+      storage: 1Gi
+
+---
+# Pod Disruption Budget for Backend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: vocare-restaurant
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: vocare-backend
+
+---
+# Pod Disruption Budget for LiveKit
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: livekit-pdb
+  namespace: vocare-restaurant
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: livekit-server
+
+---
+# Pod Disruption Budget for FreeSWITCH
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: freeswitch-pdb
+  namespace: vocare-restaurant
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: freeswitch-server
+
+---
+# Priority Classes for workload prioritization
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: vocare-critical
+value: 1000
+globalDefault: false
+description: "Critical priority class for essential Vocare services"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: vocare-high
+value: 500
+globalDefault: false
+description: "High priority class for important Vocare services"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: vocare-normal
+value: 100
+globalDefault: true
+description: "Normal priority class for standard Vocare services"

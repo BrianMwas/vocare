@@ -1,0 +1,128 @@
+# Azure Monitor and Application Insights configuration
+# This enables monitoring and observability for the Vocare Restaurant Assistant
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azure-monitor-config
+  namespace: vocare-restaurant
+data:
+  # Application Insights configuration
+  APPLICATIONINSIGHTS_CONNECTION_STRING: "InstrumentationKey=41646aa4-038e-409d-8e4b-11b78dc4d2c0;IngestionEndpoint=https://eastus-8.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus.livediagnostics.monitor.azure.com/;ApplicationId=e7de0e7f-4d40-4f46-913e-6431b1416b59"
+  APPINSIGHTS_INSTRUMENTATIONKEY: "41646aa4-038e-409d-8e4b-11b78dc4d2c0"
+
+  # Azure Monitor configuration
+  AZURE_LOG_ANALYTICS_WORKSPACE_ID: "0ab08be4-adb4-467a-9e6f-b527e7c39385"
+  AZURE_LOG_ANALYTICS_WORKSPACE_KEY: "08001e3c-3b50-4c16-816f-568170ec353a-vocare-restaurant-rg-EUS"
+
+---
+# ServiceMonitor for Prometheus scraping (if using Azure Monitor for Prometheus)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vocare-backend-monitor
+  namespace: vocare-restaurant
+  labels:
+    app: vocare-backend
+spec:
+  selector:
+    matchLabels:
+      app: vocare-backend
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# ServiceMonitor for LiveKit
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: livekit-monitor
+  namespace: vocare-restaurant
+  labels:
+    app: livekit-server
+spec:
+  selector:
+    matchLabels:
+      app: livekit-server
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# ServiceMonitor for FreeSWITCH
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: freeswitch-monitor
+  namespace: vocare-restaurant
+  labels:
+    app: freeswitch-server
+spec:
+  selector:
+    matchLabels:
+      app: freeswitch-server
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vocare-alerts
+  namespace: vocare-restaurant
+  labels:
+    app: vocare-restaurant
+spec:
+  groups:
+  - name: vocare.rules
+    rules:
+    - alert: VocareBackendDown
+      expr: up{job="vocare-backend"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Vocare Backend is down"
+        description: "Vocare Backend has been down for more than 1 minute."
+
+    - alert: LiveKitDown
+      expr: up{job="livekit-server"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "LiveKit server is down"
+        description: "LiveKit server has been down for more than 1 minute."
+
+    - alert: FreeSWITCHDown
+      expr: up{job="freeswitch-server"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "FreeSWITCH server is down"
+        description: "FreeSWITCH server has been down for more than 1 minute."
+
+    - alert: HighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{namespace="vocare-restaurant"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage detected"
+        description: "CPU usage is above 80% for more than 5 minutes."
+
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes{namespace="vocare-restaurant"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage detected"
+        description: "Memory usage is above 90% for more than 5 minutes."

@@ -1,0 +1,183 @@
+# Network Policies for Vocare Restaurant Assistant
+# These policies control traffic flow between services for security
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-network-policy
+  namespace: vocare-restaurant
+spec:
+  podSelector:
+    matchLabels:
+      app: vocare-backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from LiveKit
+  - from:
+    - podSelector:
+        matchLabels:
+          app: livekit-server
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow traffic from FreeSWITCH
+  - from:
+    - podSelector:
+        matchLabels:
+          app: freeswitch-server
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow outbound to LiveKit
+  - to:
+    - podSelector:
+        matchLabels:
+          app: livekit-server
+    ports:
+    - protocol: TCP
+      port: 7880
+  # Allow outbound to FreeSWITCH
+  - to:
+    - podSelector:
+        matchLabels:
+          app: freeswitch-server
+    ports:
+    - protocol: TCP
+      port: 8021
+  # Allow outbound to external APIs (OpenAI, Deepgram, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: livekit-network-policy
+  namespace: vocare-restaurant
+spec:
+  podSelector:
+    matchLabels:
+      app: livekit-server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow external WebSocket connections
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 7880
+    - protocol: TCP
+      port: 7881
+    - protocol: UDP
+      port: 7882
+  # Allow traffic from backend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: vocare-backend
+    ports:
+    - protocol: TCP
+      port: 7880
+  egress:
+  # Allow outbound to backend for webhooks
+  - to:
+    - podSelector:
+        matchLabels:
+          app: vocare-backend
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: freeswitch-network-policy
+  namespace: vocare-restaurant
+spec:
+  podSelector:
+    matchLabels:
+      app: freeswitch-server
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow external SIP traffic
+  - from: []
+    ports:
+    - protocol: UDP
+      port: 5060
+    - protocol: UDP
+      port: 5080
+  # Allow RTP traffic (simplified range)
+  - from: []
+    ports:
+    - protocol: UDP
+      port: 30000
+    - protocol: UDP
+      port: 30001
+    - protocol: UDP
+      port: 30002
+    - protocol: UDP
+      port: 30003
+    - protocol: UDP
+      port: 30004
+    - protocol: UDP
+      port: 30005
+    - protocol: UDP
+      port: 30006
+    - protocol: UDP
+      port: 30007
+    - protocol: UDP
+      port: 30008
+    - protocol: UDP
+      port: 30009
+    - protocol: UDP
+      port: 30010
+  # Allow traffic from backend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: vocare-backend
+    ports:
+    - protocol: TCP
+      port: 8021
+  egress:
+  # Allow outbound to backend
+  - to:
+    - podSelector:
+        matchLabels:
+          app: vocare-backend
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow outbound SIP registration
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 5060
+    - protocol: TCP
+      port: 5060
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53

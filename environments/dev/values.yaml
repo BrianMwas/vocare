@@ -1,0 +1,193 @@
+# Development Environment Configuration
+# Optimized for development and testing with minimal resources
+
+global:
+  namespace: vocare-dev
+  imageRegistry: "your-acr-registry.azurecr.io"
+  imagePullPolicy: Always
+  environment: development
+
+# Backend service configuration
+backend:
+  enabled: true
+  replicaCount: 1  # Single replica for dev
+  image:
+    repository: vocare-backend
+    tag: "dev-latest"
+  service:
+    type: ClusterIP
+    port: 8000
+    agentPort: 8081
+  resources:
+    requests:
+      memory: "256Mi"  # Reduced for dev
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  autoscaling:
+    enabled: false  # No autoscaling in dev
+
+  # Development-specific environment variables
+  env:
+    LOG_LEVEL: "DEBUG"
+    DEBUG_MODE: "true"
+    ENABLE_PROFILING: "true"
+    MOCK_EXTERNAL_APIS: "false"  # Use real APIs for testing
+
+# LiveKit server configuration
+livekit:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: livekit/livekit-server
+    tag: "latest"
+  service:
+    type: LoadBalancer  # For easy external access
+    port: 7880
+    tlsPort: 7881
+    turnPort: 7882
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+  # Development LiveKit configuration
+  config:
+    development: true
+    logLevel: "debug"
+    maxParticipants: 5  # Limited for dev
+
+# FreeSWITCH configuration
+freeswitch:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: safarov/freeswitch
+    tag: "latest"
+  service:
+    type: LoadBalancer
+    sipPort: 5060
+    sipAltPort: 5080
+    eventSocketPort: 8021
+
+  # Simplified RTP configuration for dev
+  rtp:
+    portRangeStart: 30000
+    portRangeEnd: 30005  # Smaller range
+
+  hostNetwork: false  # Use regular networking in dev
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Configuration management
+config:
+  # Application settings
+  openaiModel: "gpt-3.5-turbo"  # Cheaper model for dev
+  restaurantName: "Vocare Dev Restaurant"
+  freeswitchDomain: "dev.vocare.local"
+  freeswitchLogLevel: "DEBUG"
+
+  # LiveKit settings
+  livekitUrl: "ws://livekit-service:7880"
+
+# Secrets management
+secrets:
+  # Use Kubernetes secrets in dev (simpler)
+  useAzureKeyVault: false
+  useKubernetesSecrets: true
+
+# Azure-specific configuration
+azure:
+  workloadIdentity:
+    enabled: false  # Simplified auth in dev
+
+  # Development storage
+  storageAccount: "vocare-dev-storage"
+
+  # Container Registry
+  acr:
+    name: "vocare-dev-acr"
+
+# Networking
+networking:
+  # Relaxed network policies for dev
+  networkPolicies:
+    enabled: false
+
+  # Simple ingress for dev
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts:
+      - host: vocare-dev.local
+        paths:
+          - path: /
+            pathType: Prefix
+      - host: livekit-dev.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []  # No TLS in dev
+
+# Monitoring and observability
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    retention: "7d"  # Shorter retention in dev
+  grafana:
+    enabled: true
+    adminPassword: "admin"  # Simple password for dev
+
+  # Development-specific monitoring
+  logLevel: "debug"
+  metricsInterval: "30s"
+  alerting:
+    enabled: false  # No alerting in dev
+
+# Development-specific settings
+development:
+  # Enable debug features
+  debugMode: true
+  hotReload: true
+  mockServices: false
+
+  # Development tools
+  tools:
+    enabled: true
+    kubectl: true
+    helm: true
+    debugger: true
+
+  # Relaxed security for dev
+  security:
+    podSecurityStandards: "privileged"
+    runAsRoot: true
+    allowPrivilegeEscalation: true
+
+# Resource quotas (relaxed for dev)
+resourceQuota:
+  enabled: true
+  limits:
+    cpu: "2"
+    memory: "4Gi"
+    storage: "20Gi"
+    pods: "10"
+
+# Node selection (prefer smaller nodes in dev)
+nodeSelector:
+  kubernetes.io/instance-type: "Standard_B2s"
+
+tolerations: []
+affinity: {}

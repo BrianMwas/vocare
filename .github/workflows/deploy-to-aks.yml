@@ -1,0 +1,106 @@
+name: Deploy to Azure AKS
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.ACR_NAME }}
+  CONTAINER_NAME: vocare-backend
+  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Log in to Azure Container Registry
+      run: az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+    - name: Build and push Docker image
+      run: |
+        # Create production Dockerfile if it doesn't exist
+        if [ ! -f "Dockerfile.prod" ]; then
+          cp Dockerfile Dockerfile.prod
+        fi
+
+        # Build and push image
+        IMAGE_TAG=${GITHUB_SHA::8}
+        FULL_IMAGE_NAME=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:$IMAGE_TAG
+
+        docker build -f Dockerfile.prod -t $FULL_IMAGE_NAME .
+        docker push $FULL_IMAGE_NAME
+
+        # Also tag as latest for main branch
+        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          LATEST_IMAGE_NAME=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:latest
+          docker tag $FULL_IMAGE_NAME $LATEST_IMAGE_NAME
+          docker push $LATEST_IMAGE_NAME
+        fi
+
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "FULL_IMAGE_NAME=$FULL_IMAGE_NAME" >> $GITHUB_ENV
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.CLUSTER_NAME }}
+
+    - name: Deploy to AKS (Development)
+      if: github.ref == 'refs/heads/develop'
+      run: |
+        # Update image in deployment
+        kubectl set image deployment/backend-deployment vocare-backend=${{ env.FULL_IMAGE_NAME }} -n vocare-restaurant
+
+        # Wait for rollout
+        kubectl rollout status deployment/backend-deployment -n vocare-restaurant --timeout=300s
+
+    - name: Deploy to AKS (Production)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        # Use Helm for production deployments
+        helm upgrade --install vocare-restaurant ./helm/vocare-restaurant \
+          --namespace vocare-restaurant \
+          --create-namespace \
+          --set backend.image.tag=${{ env.IMAGE_TAG }} \
+          --set global.imageRegistry=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io \
+          --wait --timeout=10m
+
+    - name: Run health checks
+      run: |
+        # Wait for pods to be ready
+        kubectl wait --for=condition=ready pod -l app=vocare-backend -n vocare-restaurant --timeout=300s
+
+        # Check service endpoints
+        kubectl get services -n vocare-restaurant
+
+        # Basic health check
+        BACKEND_IP=$(kubectl get service backend-service -n vocare-restaurant -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        if [ ! -z "$BACKEND_IP" ]; then
+          curl -f http://$BACKEND_IP:8000/health || echo "Health check failed"
+        fi
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "✅ Deployment successful!"
+        else
+          echo "❌ Deployment failed!"
+        fi

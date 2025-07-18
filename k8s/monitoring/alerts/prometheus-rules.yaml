@@ -1,0 +1,226 @@
+# Advanced Prometheus Alerting Rules for Vocare Restaurant Assistant
+# These rules provide comprehensive monitoring and alerting for production workloads
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vocare-advanced-alerts
+  namespace: vocare-restaurant
+  labels:
+    app: vocare-restaurant
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: vocare.critical
+    interval: 30s
+    rules:
+    - alert: VocareServiceDown
+      expr: up{namespace="vocare-restaurant"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: "{{ $labels.job }}"
+      annotations:
+        summary: "Vocare service {{ $labels.job }} is down"
+        description: "Service {{ $labels.job }} in namespace {{ $labels.namespace }} has been down for more than 1 minute."
+        runbook_url: "https://docs.vocare.com/runbooks/service-down"
+
+    - alert: VocareHighErrorRate
+      expr: |
+        (
+          rate(http_requests_total{namespace="vocare-restaurant",status=~"5.."}[5m]) /
+          rate(http_requests_total{namespace="vocare-restaurant"}[5m])
+        ) * 100 > 5
+      for: 2m
+      labels:
+        severity: critical
+        service: "{{ $labels.job }}"
+      annotations:
+        summary: "High error rate detected for {{ $labels.job }}"
+        description: "Error rate is {{ $value }}% for service {{ $labels.job }}"
+        runbook_url: "https://docs.vocare.com/runbooks/high-error-rate"
+
+    - alert: VocareResponseTimeHigh
+      expr: |
+        histogram_quantile(0.95,
+          rate(http_request_duration_seconds_bucket{namespace="vocare-restaurant"}[5m])
+        ) > 2
+      for: 3m
+      labels:
+        severity: critical
+        service: "{{ $labels.job }}"
+      annotations:
+        summary: "High response time for {{ $labels.job }}"
+        description: "95th percentile response time is {{ $value }}s"
+        runbook_url: "https://docs.vocare.com/runbooks/high-latency"
+
+  - name: vocare.telephony
+    interval: 30s
+    rules:
+    - alert: SIPCallFailureRate
+      expr: |
+        (
+          rate(vocare_sip_calls_failed_total[5m]) /
+          rate(vocare_sip_calls_total[5m])
+        ) * 100 > 10
+      for: 2m
+      labels:
+        severity: warning
+        component: "sip"
+      annotations:
+        summary: "High SIP call failure rate"
+        description: "SIP call failure rate is {{ $value }}%"
+        runbook_url: "https://docs.vocare.com/runbooks/sip-failures"
+
+    - alert: FreeSWITCHDown
+      expr: up{job="freeswitch-server"} == 0
+      for: 30s
+      labels:
+        severity: critical
+        component: "freeswitch"
+      annotations:
+        summary: "FreeSWITCH server is down"
+        description: "FreeSWITCH server has been unreachable for 30 seconds"
+        runbook_url: "https://docs.vocare.com/runbooks/freeswitch-down"
+
+    - alert: LiveKitParticipantLimit
+      expr: livekit_participants_total > 45
+      for: 1m
+      labels:
+        severity: warning
+        component: "livekit"
+      annotations:
+        summary: "LiveKit approaching participant limit"
+        description: "Current participants: {{ $value }}/50"
+        runbook_url: "https://docs.vocare.com/runbooks/livekit-capacity"
+
+    - alert: RTPPacketLoss
+      expr: vocare_rtp_packet_loss_percent > 5
+      for: 2m
+      labels:
+        severity: warning
+        component: "rtp"
+      annotations:
+        summary: "High RTP packet loss detected"
+        description: "RTP packet loss is {{ $value }}%"
+        runbook_url: "https://docs.vocare.com/runbooks/rtp-quality"
+
+  - name: vocare.resources
+    interval: 60s
+    rules:
+    - alert: VocarePodCPUHigh
+      expr: |
+        (
+          rate(container_cpu_usage_seconds_total{namespace="vocare-restaurant"}[5m]) * 100
+        ) > 80
+      for: 5m
+      labels:
+        severity: warning
+        pod: "{{ $labels.pod }}"
+      annotations:
+        summary: "High CPU usage for pod {{ $labels.pod }}"
+        description: "CPU usage is {{ $value }}%"
+        runbook_url: "https://docs.vocare.com/runbooks/high-cpu"
+
+    - alert: VocarePodMemoryHigh
+      expr: |
+        (
+          container_memory_usage_bytes{namespace="vocare-restaurant"} /
+          container_spec_memory_limit_bytes{namespace="vocare-restaurant"}
+        ) * 100 > 90
+      for: 5m
+      labels:
+        severity: warning
+        pod: "{{ $labels.pod }}"
+      annotations:
+        summary: "High memory usage for pod {{ $labels.pod }}"
+        description: "Memory usage is {{ $value }}%"
+        runbook_url: "https://docs.vocare.com/runbooks/high-memory"
+
+    - alert: VocarePodRestartLoop
+      expr: |
+        rate(kube_pod_container_status_restarts_total{namespace="vocare-restaurant"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        pod: "{{ $labels.pod }}"
+      annotations:
+        summary: "Pod {{ $labels.pod }} is restarting frequently"
+        description: "Pod has restarted {{ $value }} times in the last 15 minutes"
+        runbook_url: "https://docs.vocare.com/runbooks/pod-restarts"
+
+  - name: vocare.business
+    interval: 60s
+    rules:
+    - alert: CallVolumeAnomaly
+      expr: |
+        abs(
+          vocare_calls_per_hour -
+          avg_over_time(vocare_calls_per_hour[24h])
+        ) > (2 * stddev_over_time(vocare_calls_per_hour[24h]))
+      for: 10m
+      labels:
+        severity: info
+        type: "anomaly"
+      annotations:
+        summary: "Unusual call volume detected"
+        description: "Current call volume deviates significantly from normal patterns"
+        runbook_url: "https://docs.vocare.com/runbooks/call-volume-anomaly"
+
+    - alert: AIResponseQuality
+      expr: vocare_ai_response_quality_score < 0.8
+      for: 5m
+      labels:
+        severity: warning
+        component: "ai"
+      annotations:
+        summary: "AI response quality degraded"
+        description: "AI response quality score is {{ $value }}"
+        runbook_url: "https://docs.vocare.com/runbooks/ai-quality"
+
+    - alert: CustomerSatisfactionLow
+      expr: vocare_customer_satisfaction_score < 3.5
+      for: 10m
+      labels:
+        severity: warning
+        type: "business"
+      annotations:
+        summary: "Customer satisfaction score is low"
+        description: "Average satisfaction score: {{ $value }}/5"
+        runbook_url: "https://docs.vocare.com/runbooks/customer-satisfaction"
+
+  - name: vocare.security
+    interval: 30s
+    rules:
+    - alert: UnauthorizedAccess
+      expr: rate(vocare_unauthorized_requests_total[5m]) > 0.1
+      for: 1m
+      labels:
+        severity: warning
+        type: "security"
+      annotations:
+        summary: "Unauthorized access attempts detected"
+        description: "{{ $value }} unauthorized requests per second"
+        runbook_url: "https://docs.vocare.com/runbooks/security-incident"
+
+    - alert: KeyVaultAccessFailure
+      expr: rate(vocare_keyvault_access_failures_total[5m]) > 0
+      for: 2m
+      labels:
+        severity: critical
+        component: "keyvault"
+      annotations:
+        summary: "Key Vault access failures"
+        description: "Unable to access Azure Key Vault secrets"
+        runbook_url: "https://docs.vocare.com/runbooks/keyvault-access"
+
+    - alert: CertificateExpiringSoon
+      expr: (vocare_certificate_expiry_timestamp - time()) / 86400 < 30
+      for: 1h
+      labels:
+        severity: warning
+        type: "certificate"
+      annotations:
+        summary: "Certificate expiring soon"
+        description: "Certificate expires in {{ $value }} days"
+        runbook_url: "https://docs.vocare.com/runbooks/certificate-renewal"

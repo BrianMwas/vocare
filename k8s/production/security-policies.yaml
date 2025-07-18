@@ -1,0 +1,179 @@
+# Production Security Policies
+# Enhanced security configurations for production deployment
+
+# Pod Security Standards - Restricted profile for most workloads
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vocare-restaurant
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    app: vocare-restaurant
+    environment: production
+
+---
+# Security Context Constraints for FreeSWITCH (requires elevated privileges)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vocare-telephony
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/warn: baseline
+    app: vocare-restaurant
+    environment: production
+    workload-type: telephony
+
+---
+# Network Policy - Default Deny All
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: vocare-restaurant
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# Network Policy - Allow DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: vocare-restaurant
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# Network Policy - Allow external HTTPS for API calls
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-https
+  namespace: vocare-restaurant
+spec:
+  podSelector:
+    matchLabels:
+      app: vocare-backend
+  policyTypes:
+  - Egress
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+
+---
+# RBAC - Service Account for backend
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vocare-backend-sa
+  namespace: vocare-restaurant
+  annotations:
+    azure.workload.identity/client-id: "f5bab3ac-2bf5-42a1-a7c1-b061d112e935"
+  labels:
+    azure.workload.identity/use: "true"
+automountServiceAccountToken: false
+
+---
+# RBAC - Role for backend service
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vocare-backend-role
+  namespace: vocare-restaurant
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+---
+# RBAC - RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vocare-backend-binding
+  namespace: vocare-restaurant
+subjects:
+- kind: ServiceAccount
+  name: vocare-backend-sa
+  namespace: vocare-restaurant
+roleRef:
+  kind: Role
+  name: vocare-backend-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Security Context for Backend Pods
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-contexts
+  namespace: vocare-restaurant
+data:
+  backend-security-context.yaml: |
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        drop:
+        - ALL
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+
+  livekit-security-context.yaml: |
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        drop:
+        - ALL
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false  # LiveKit needs write access
+
+  freeswitch-security-context.yaml: |
+    securityContext:
+      runAsNonRoot: false  # FreeSWITCH may need root for some operations
+      runAsUser: 0
+      runAsGroup: 0
+      fsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        add:
+        - SYS_NICE  # Required for FreeSWITCH
+        drop:
+        - ALL
+      allowPrivilegeEscalation: true  # Required for FreeSWITCH

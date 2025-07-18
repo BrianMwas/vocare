@@ -1,0 +1,162 @@
+# Alternative RTP Service using NodePort for better port range support
+# This approach uses NodePort to expose RTP ports directly on nodes
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: freeswitch-rtp-nodeport
+  namespace: vocare-restaurant
+  labels:
+    app: freeswitch-server
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-external-subnet: "default"
+spec:
+  selector:
+    app: freeswitch-server
+  type: NodePort
+  ports:
+  # RTP port range using NodePort
+  - name: rtp-30000
+    port: 30000
+    targetPort: 30000
+    nodePort: 30000
+    protocol: UDP
+  - name: rtp-30001
+    port: 30001
+    targetPort: 30001
+    nodePort: 30001
+    protocol: UDP
+  - name: rtp-30002
+    port: 30002
+    targetPort: 30002
+    nodePort: 30002
+    protocol: UDP
+  - name: rtp-30003
+    port: 30003
+    targetPort: 30003
+    nodePort: 30003
+    protocol: UDP
+  - name: rtp-30004
+    port: 30004
+    targetPort: 30004
+    nodePort: 30004
+    protocol: UDP
+  - name: rtp-30005
+    port: 30005
+    targetPort: 30005
+    nodePort: 30005
+    protocol: UDP
+  - name: rtp-30006
+    port: 30006
+    targetPort: 30006
+    nodePort: 30006
+    protocol: UDP
+  - name: rtp-30007
+    port: 30007
+    targetPort: 30007
+    nodePort: 30007
+    protocol: UDP
+  - name: rtp-30008
+    port: 30008
+    targetPort: 30008
+    nodePort: 30008
+    protocol: UDP
+  - name: rtp-30009
+    port: 30009
+    targetPort: 30009
+    nodePort: 30009
+    protocol: UDP
+  - name: rtp-30010
+    port: 30010
+    targetPort: 30010
+    nodePort: 30010
+    protocol: UDP
+
+---
+# Host Network Deployment for FreeSWITCH (Alternative approach)
+# This uses host networking to bypass Kubernetes networking limitations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: freeswitch-hostnetwork
+  namespace: vocare-restaurant
+  labels:
+    app: freeswitch-hostnetwork
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: freeswitch-hostnetwork
+  template:
+    metadata:
+      labels:
+        app: freeswitch-hostnetwork
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: freeswitch-server
+        image: safarov/freeswitch:latest
+        env:
+        - name: SOUND_RATES
+          value: "8000,16000"
+        - name: SOUND_TYPES
+          value: "wav"
+        - name: FREESWITCH_LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: FREESWITCH_LOG_LEVEL
+        - name: FREESWITCH_DEFAULT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: vocare-freeswitch-secrets
+              key: default-password
+        - name: FREESWITCH_DOMAIN
+          valueFrom:
+            configMapKeyRef:
+              name: vocare-config
+              key: FREESWITCH_DOMAIN
+        # External IP configuration for host network
+        - name: FREESWITCH_EXTERNAL_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        volumeMounts:
+        - name: freeswitch-config
+          mountPath: /etc/freeswitch
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        securityContext:
+          capabilities:
+            add:
+            - SYS_NICE
+        livenessProbe:
+          tcpSocket:
+            port: 8021
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 8021
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: freeswitch-config
+        configMap:
+          name: freeswitch-config
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - key: "vocare.com/freeswitch"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"

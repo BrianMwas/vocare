@@ -1,5 +1,6 @@
 # main.py - LiveKit Restaurant Assistant Entrypoint with SIP Support
 import logging
+import atexit
 
 from livekit.agents import JobContext, WorkerOptions, AgentSession, cli, AutoSubscribe, Worker
 from livekit.plugins import groq
@@ -8,13 +9,14 @@ from manager import FirebaseManager
 from assistant import IntentClassifierAgent
 from config import load_config, validate_config
 from error_handlers import RestaurantErrorHandler, SipCallHandler
+from health_server import start_health_server, stop_health_server, set_ready, set_healthy, add_health_check
 
 logger = logging.getLogger(__name__)
 
 
 async def entrypoint(ctx: JobContext):
     """Main entrypoint for the restaurant assistant with SIP support"""
-    
+
     try:
         # Load and validate configuration
         config = load_config()
@@ -23,7 +25,10 @@ async def entrypoint(ctx: JobContext):
 
         # Initialize Firebase manager
         firebase = FirebaseManager(config.firebase_service_account_path)
-        
+
+        # Update health status with Firebase connection
+        add_health_check("firebase", True, "Firebase connection established")
+
         # Initialize error handlers
         error_handler = RestaurantErrorHandler(firebase)
         sip_handler = SipCallHandler(firebase)
@@ -92,6 +97,9 @@ async def entrypoint(ctx: JobContext):
             
     except Exception as e:
         logger.error(f"Critical error in entrypoint: {e}")
+        # Update health status on critical errors
+        add_health_check("entrypoint", False, f"Critical error: {str(e)}")
+        set_healthy(False)
         raise
 
 def calculate_worker_load(worker: Worker) -> float:
@@ -116,6 +124,28 @@ def calculate_worker_load(worker: Worker) -> float:
         return 0.5  # Return moderate load on error
 
 if __name__ == "__main__":
+    # Start health check server for Kubernetes
+    logger.info("🏥 Starting health check server...")
+    start_health_server(port=8000)
+
+    # Register cleanup function
+    atexit.register(stop_health_server)
+
+    # Basic health checks (without duplicating Firebase init)
+    try:
+        config = load_config()
+        add_health_check("config", True, "Configuration loaded successfully")
+        set_healthy(True)
+        logger.info("✅ Basic health checks passed")
+
+    except Exception as e:
+        logger.error(f"❌ Health check failed: {e}")
+        add_health_check("startup", False, str(e))
+        set_healthy(False)
+
+    # Mark as ready - the entrypoint will handle detailed initialization
+    set_ready(True)
+
     # Configure CLI options for SIP support
     cli.run_app(WorkerOptions(
         entrypoint_fnc=entrypoint,
@@ -123,7 +153,7 @@ if __name__ == "__main__":
         num_idle_processes=2,  # Keep 2 processes warm
         load_threshold=0.8,  # Mark as unavailable at 80% load
         job_memory_warn_mb=1000,  # Warn at 1GB memory usage
-        job_memory_limit_mb=2000,  
+        job_memory_limit_mb=2000,
         max_retry=3,
         port=8081,
     ))
